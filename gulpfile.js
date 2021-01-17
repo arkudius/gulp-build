@@ -224,12 +224,6 @@ function imagesBuild() {
     svgoPlugins: [{ removeViewBox: false }],
     interlaced: true,
     optimizationLevel: 3 // 0 to 7
-  }))
-  .pipe(imagemin({
-    progressive: true,
-    svgoPlugins: [{ removeViewBox: false }],
-    interlaced: true,
-    optimizationLevel: 3 // 0 to 7
   },
     [
       recompress({
