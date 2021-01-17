@@ -1,5 +1,7 @@
 const {src, dest, watch, parallel, series} = require('gulp');
 
+const fs = require('fs');
+
 // Рабочая папка проекта
 // const appFolder = require("path").basename(__dirname);
 const appFolder = "app/"
@@ -42,9 +44,13 @@ const path = {
     favicon: srcFolder + "favicon.{jpg,png,svg,gif,ico,webp}",
     html: [srcFolder + "*.html", "!" + srcFolder + "_*.html"],
     js: srcFolder + "js/main.js",
-		css: srcFolder + "scss/style.scss",
-		images: [srcFolder + "images/**/*.{jpg,png,svg,gif,ico,webp}", "!**/favicon.*"],
-		fonts: srcFolder + "/fonts/**/*"
+    css: srcFolder + "scss/style.scss",
+    cssFonts: srcFolder + "scss/fonts.scss",
+    images: [srcFolder + "images/**/*.{jpg,png,svg,gif,ico,webp}", "!**/favicon.*"],
+    fonts: srcFolder + "/fonts/",
+		woffFonts: srcFolder + "/fonts/**/*.{woff,woff2}",
+		ttfFonts: srcFolder + "/fonts/**/*.ttf",
+    otfFonts: srcFolder + "/fonts/**/*.otf",
   },
   // Пути по которым происходит отслеживание файлов исходного проекта
   watch: {
@@ -79,6 +85,10 @@ const babel       = require('gulp-babel');
 const imagemin    = require('gulp-imagemin');
 const recompress  = require('imagemin-jpeg-recompress');
 const pngquant    = require('imagemin-pngquant');
+// Конвертация шрифтов в форматы woff & woff2
+const ttf2woff    = require('gulp-ttf2woff');
+const ttf2woff2   = require('gulp-ttf2woff2');
+const fonter      = require('gulp-fonter');
 // Проверяет стоит ли обрабатывать файлы, если они уже имеются в исходной папке 
 const newer = require('gulp-newer');
 // Удаление файлов и папок
@@ -152,7 +162,7 @@ function favicon() {
 
 // Функция обработки шрифтов 
 function fonts() { 
-  return src(path.src.fonts)
+  return src(path.src.woffFonts)
     .pipe(newer(path.work.fonts))
     .pipe(dest(path.work.fonts))
     .pipe(browsersync.stream());
@@ -253,7 +263,7 @@ function faviconBuild() {
 
  // Функция обработки шрифтов для выходного проекта
 function fontsBuild() { 
-  return src(path.src.fonts, {base: 'src'})
+  return src(path.src.woffFonts)
   .pipe(dest(path.dist.fonts));
 } 
 
@@ -286,6 +296,49 @@ function clean() {
   return del(distFolder);
 }
 
+// Функция конвертации OTF шрифтов в TTF
+function convertOtfFonts() { 
+  return src(path.src.otfFonts)
+    .pipe(fonter({
+      formats: ['ttf']
+    }))
+    .pipe(dest(path.src.fonts));
+}
+
+// Функция конвертации TTF шрифтов в WOFF & WOFF2
+function convertTtfFonts() { 
+  src(path.src.ttfFonts)
+    .pipe(ttf2woff())
+    .pipe(dest(path.src.fonts));
+
+  return src(path.src.ttfFonts)
+    .pipe(ttf2woff2())
+    .pipe(dest(path.src.fonts));
+}
+
+// Функция записи информации в файл fonts.scss
+function writeFontsStyle(callback) { 
+  let fileContent = fs.readFileSync(path.src.cssFonts);
+  if (fileContent == '') { 
+    fs.writeFile(path.src.cssFonts, '', callback);
+    return fs.readdir(path.src.woffFonts, function (err, items) { 
+      if (items) { 
+        let cFontName;
+        for (var i = 0; i < items.length; i++) { 
+          let fontname = items[i].split('.');
+          fontname = fontname[0];
+          if (cFontName != fontname) {
+            fs.appendFile(path.src.cssFonts, '@include font("' + fontname + '", "' + fontname + '", "400", "normal");\r\n', callback);
+          }
+          cFontName = fontname;
+        }
+      }
+    })
+  }
+  callback();
+}
+function callback() { }
+
 exports.html = html;
 exports.css = css;
 exports.js = js;
@@ -304,5 +357,6 @@ exports.browserSync = browserSync;
 exports.watchFiles = watchFiles;
 exports.clean = clean;
 
+exports.convertFonts = series(convertOtfFonts, convertTtfFonts, writeFontsStyle); 
 exports.build = series(clean, htmlBuild, cssBuild, jsBuild, imagesBuild, fontsBuild, faviconBuild);
 exports.default = parallel(html, css, js, images, fonts, favicon, browserSync, watchFiles);
